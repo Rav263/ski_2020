@@ -1,0 +1,281 @@
+\documentclass[a4peper, 12pt, titlepage, finall]{extreport}
+
+%различные пакеты
+
+\usepackage[T1, T2A]{fontenc}
+\usepackage[russian]{babel}
+\usepackage[justification=centering]{caption}
+\usepackage[backend=bibtex]{biblatex}
+\usepackage{csquotes}
+\usepackage{tikz}
+\usepackage{geometry}
+\usepackage{indentfirst}
+\usepackage{fontspec}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{pgfplots}
+\usepackage{fancyvrb}
+\usepackage{listings}
+\graphicspath{{./images/}}
+
+\usetikzlibrary{positioning, arrows}
+
+\makeatletter
+\newcount\dirtree@lvl
+\newcount\dirtree@plvl
+\newcount\dirtree@clvl
+\def\dirtree@growth{%
+  \ifnum\tikznumberofcurrentchild=1\relax
+  \global\advance\dirtree@plvl by 1
+  \expandafter\xdef\csname dirtree@p@\the\dirtree@plvl\endcsname{\the\dirtree@lvl}
+  \fi
+  \global\advance\dirtree@lvl by 1\relax
+  \dirtree@clvl=\dirtree@lvl
+  \advance\dirtree@clvl by -\csname dirtree@p@\the\dirtree@plvl\endcsname
+  \pgf@xa=1cm\relax
+  \pgf@ya=-1cm\relax
+  \pgf@ya=\dirtree@clvl\pgf@ya
+  \pgftransformshift{\pgfqpoint{\the\pgf@xa}{\the\pgf@ya}}%
+  \ifnum\tikznumberofcurrentchild=\tikznumberofchildren
+  \global\advance\dirtree@plvl by -1
+  \fi
+}
+
+\tikzset{
+  dirtree/.style={
+    growth function=\dirtree@growth,
+    every node/.style={anchor=north},
+    every child node/.style={anchor=west},
+    edge from parent path={(\tikzparentnode\tikzparentanchor) |- (\tikzchildnode\tikzchildanchor)}
+  }
+}
+\makeatother
+
+
+\geometry{a4paper, left = 15mm, top = 10mm, bottom = 15mm, right = 15mm}
+\setmainfont{Spectral Light}%{Times New Roman}
+\setcounter{secnumdepth}{0}
+%\setcounter{tocdepth}{3}
+\nocite{*}
+
+\begin{document}
+\begin{titlepage}
+    \begin{center}
+	{\small \sc Московский государственный университет \\имени М.~В.~Ломоносова\\
+	Факультет вычислительной математики и кибернетики\\}
+	\vfill
+	~\\
+	{\Large Копмьютерный практикум по учебному курсу}\\
+	~\\
+	{\large \bf \sc <<РАСПРЕДЕЛЕННЫЕ СИСТЕМЫ>>}\\ 
+	~\\
+	~\\
+	{\large \bf \sc ЗАДАНИЯ}\\
+	~\\
+	{\large \bf Круговой алгоритм выбора координатора}
+	~\\
+	~\\
+	{\large \bf Доработка MPI программы, реализованной в рамках курса "Суперкомпьютеры и параллельная обработка данных" с целью улучшить надежность}
+	~\\
+	~\\
+	{\large \bf \sc ОТЧЕТ}\\
+	~\\
+	{\large \bf о выполненном задании}\\
+	~\\
+	{\large студента 421 учебной группы факультета ВМК МГУ}\\
+	~\\
+	{\large Никифорова Н.И.}\\
+	~\\
+	\vfill
+	{\small Москва\\2021}
+    \end{center}
+\end{titlepage}
+    \section{Постановка задачи}
+        Необходимо было выполнить следующие два пункта:
+        \begin{itemize}
+            \item  В транспьютерной матрице размером 5*5, в каждом узле которой находится один процесс, необходимо переслать очень длинное сообщение 
+                (длиной L байт) из узла с координатами (0,0) в узел с координатами (4,4). Реализовать программу, моделирующую выполнение такой пересылки 
+                на транспьютерной матрице с иcпользованием блокирующих операций MPI. Получить временную оценку работы алгоритма, 
+                если время старта равно 100, время передачи байта равно 1 (Ts=100,Tb=1). Процессорные операции, включая чтение из памяти и запись в память, считаются бесконечно быстрыми.
+            \item Доработать MPI-программу, реализованную в рамках курса “Суперкомпьютеры и параллельная обработка данных”. Добавить контрольные точки 
+                для продолжения работы программы в случае сбоя. Реализовать один из 3-х сценариев работы после сбоя: a) продолжить работу 
+                программы только на “исправных” процессах; б) вместо процессов, вышедших из строя, создать новые MPI-процессы, которые необходимо использовать 
+                для продолжения расчетов; в) при запуске программы на счет сразу запустить некоторое дополнительное количество MPI-процессов, которые использовать в случае сбоя.
+        \end{itemize}
+        \section{Структура проекта}
+            Код проекта доступен в открытом репозиторие по ссылке \textbf{https://github.com/Rav263/ski\_2020}, код предыдущего задания находится по ссылке 
+            \textbf{https://github.com/Rav263/SKI\_adi2d}. Проект состоит из двух частей, для каждого пункта задачи соответственно.
+                \begin{flushleft}
+                \begin{tikzpicture}[dirtree]
+                    \node {ski\_2020}
+                        child { node {part\_1}
+                            child { node {main.cpp} }
+                        }
+                        child { node {part\_2}
+                            child { node {Adi2D\_MPI\_error\_correction.c}}
+                            child { node {Adi2D\_MPI.c} }
+                        }
+                        child { node {report}
+                            child { node {report.tex} }
+                            child { node {report.pdf} }
+                        };
+                \end{tikzpicture}
+            \end{flushleft}
+        \section{Сборка проекта}
+            \subsection{Первый пункт (блокирующий алгоритм передачи сообщения)}
+\begin{lstlisting}
+cd ./part_1
+mpic++ main.cpp
+mpirun -n 25 --oversubscribe ./a.out
+\end{lstlisting}
+            \subsection{Второй пункт (Улучшение существующего алгоритма Adi2D)}
+                Для сборки второй части программы требуется установленный пакет ulfm (Можно найти на сайте \textbf{fault-tolerance.org}).
+    Сборка ulfm (флаги для \textbf{configure} взяты из системного mpi:\\
+\begin{lstlisting}
+git clone https://bitbucket.org/icldistcomp/ulfm2.git
+cd ulfm2
+git submodule update --init --recursive
+./autogen.pl
+./configure ’--prefix=/usr’ ’--sysconfdir=/etc/openmpi’\
+            ’--enable-mpi-fortran=all’\
+            ’--libdir=/usr/lib/openmpi’\
+            ’--enable-builtin-atomics’ ’--enable-mpi-cxx’\
+            ’--with-valgrind’ ’--enable-memchecker’\
+            ’--enable-pretty-print-stacktrace’\
+            ’--without-slurm’ ’--with-hwloc=/usr’\
+            ’--with-libltdl=/usr’ ’FC=/usr/bin/gfortran’
+make all
+sudo make install
+\end{lstlisting}
+~\\
+            Сборка алгоритма: 
+~\\
+\begin{lstlisting}
+cd ./part_2
+mpicc Adi2D\_MPI\_error\_correction.c
+mpirun -n 6 --oversubscribe ./a.out
+\end{lstlisting}
+    \section{Тестовый стенд}
+        \begin{itemize}
+            \item Процессор $-$ AMD Ryzen 2700X 8/16 (ядер/потоков) 4.2 Ghz на одно ядро, 4.0 Ghz на все ядра.
+            \item Память $-$ 32Gb DDDR4 3200Mhz (Пропускная способность 44GB/s).
+        \end{itemize}
+    \section{Алгоритм блокирующей пересылки сообщения на транспьютерной матрице}
+        На рисунке~\ref{fig:dep} изображена транспьютерная матрица, желтым цветом обозначены стартовая и конечная вершина, красным и зелёным соответственно первый и второй пути передачи сообщения.
+        В начале программы происходит инициализация процессов в клетках транспьютерной матрице. Затем первый процесс начинает рассылку сообщения. 
+        Время старта равно 100, время передачи одного байта равно 1. \(Ts = 100, Tb = 1\).
+        Введём некоторые обозначения:
+        \begin{itemize}
+            \item Длина сообщения $-$ \(L\) (байт);
+            \item Количество кусков, на которое делится сообщение $-$ \(K\);
+            \item Количество путей $-$ \(P = 2\) так как пути не должны пересекаться;
+            \item Размер одного сообщения $-$ \(N = \frac{L}{P * K}\) (байт);
+        \end{itemize}
+
+        Теперь рассчитаем время передачи одного сообщения. Из процесса \((0, 0\) до процесса \((4, 4)\), происходит \(8\) передач. 
+        Соответственно на передачу одного куска сообщения потребуется \(8 * (Ts + Tb * \frac{L}{P * K}) = 8 * (Ts + Tt * N)\).
+        (На инициализацию канала передачи)
+        А время передачи остальных кусков сообщения \((K - 1) * (Ts + Tb * N)\).
+        Тогда общее время передачи будет равно:\\
+        \begin{center}
+            $T_{all} = 8 * (Ts + Tb * \frac{L}{P * K}) + (K - 1) * (Ts + Tb * \frac{L}{P * K})$\\
+            $T_{all} = 8 * (Ts + Tb * N) + (K - 1) * (Ts + Tb * N)$
+        \end{center}
+
+        Но так как в условии говорится об \textit{очень длинном сообщении} можно пренебречь временем старта передачи сообщения, длиной маршрута и временем разгона конвейера.
+        Таким образом у нас остаётся только \(Tb\):
+        \begin{center}
+            $T_{all} = L * Tb / P$
+        \end{center}
+
+        \begin{figure}[htbp]
+            \centering
+            \includegraphics[width=0.7\textwidth]{matrix.png}
+            \caption{Транспьютерная матрица}\label{fig:dep}
+        \end{figure}
+    \section{Улучшение алгоритма \textbf{Adi2D}}
+        Необходимо было улучшить алгоритм {\tt Adi2D} с целью улучшения надёжности.
+        Был выбран вариант с созданием дополнительных процессов при старте программы, которые будут использоваться в случае сбоя.
+        Также каждые 5 итераций каждый процесс сохраняет свою часть матрицы в файл $-$ контрольные точки.
+
+        Описание внесённых изменений:
+        \begin{enumerate}
+            \item Переменная {\tt \bf additional\_procs} задаёт количество дополнительных процессов, который создаются на старте.
+            \item Функция {\tt \bf verbose\_errhandler} отвечает за обработку ошибок, возникших во время работы программы.
+                В начале выполнения данной функции вызывается {\tt MPIX\_Comm\_revoke}, чтобы прервать все текущие операции
+                общения и все оставшиеся процессы попали в данную функцию. В конце данной функции происходит перераспределение рангов, очищается
+                выделенная память и происходит выделение новой $-$ соответствующей по размеру рангу процесса. Затем выставляется флаг ошибки, который позволяет
+                пропустить, после выхода из функции обработки ошибок, все дальнейшие операции вычисления до новой итерации. В начале итерации, если стоит флаг
+                ошибки происходит загрузка данных с последней контрольной точки, и флаг ошибки сбрасывается.
+            \item Функция {\tt \bf save\_matrix()} сохраняет матрицу в файл {\tt matrix\_{\it rank}}, где {\tt \it rank} $-$ ранг процесса, выполняющего запись.
+            \item Функция {\tt \bf load\_matrix()} загружает матрицу из файла {\tt matrix\_{\it rank}}, где {\tt \it rank} $-$ ранг процесса, выполняющего загрузку.
+            \item Переменная {\tt \bf last\_save\_it} хранит номер последний итерации на которой была сделана контрольная точка.
+        \end{enumerate}
+
+        \subsection{Экспериментальное исследование}
+            Было проведено небольшое экспериментальное исследование, целью которого было выяснить процентное падение производительности относительно не модифицированной версии программы.
+            А также выяснить время, которое занимает восстановление программы. Исходя из прошлого исследования был выбран размер матрицы \(8192\),
+            как самый оптимальный для подсчёта на 8 потоках.
+
+            Как видно на рисунке~\ref{graph:1} с увеличением количества потоков и увеличивается разрыв во времени выполнения старой и улучшенной версий, это связано с количеством записей в файлы,
+            так как чем больше число потоков, тем больше времени занимает запись. В процентном соотношении разрыв составил \(13\% ... 90\%\).
+            
+            Рассмотрим теперь время затрачиваемое на восстановления после возникновения ошибки. Как видно из рисунка~\ref{graph:2} чем больше процессов используется, тем больше времени занимает восстановление, при одинаковом количестве ошибок.
+
+            \begin{figure}[!htbp]
+                \centering
+            \begin{tikzpicture}
+            \begin{axis}[
+                width=0.8\textwidth,
+                height=0.6\textwidth,
+                ylabel={Время, секунды},
+                xlabel={Количество потоков},
+                y label style={at={(-0.05, 0.5)}},
+                ymin=0, ymax=45,
+                xmin=0, xmax=10,
+                xtick={0, 1, 2, 3, 4, 5, 6, 7, 8},
+                ytick={5, 10, 15, 20, 25, 30, 35, 40},
+                legend pos=south east,
+                ymajorgrids=true,
+                grid style=dashed,
+                cycle list name=color list] 
+                \addplot+[mark=square] coordinates{(1, 34.591)(2, 25.401)(4, 21.079)(6, 20.50)(8, 19.549)};
+                \addplot+[mark=square] coordinates{(1, 30.502)(2, 18.450)(4, 12.648)(6, 11.051)(8, 10.271)};
+                \legend{New, Old}
+     
+            \end{axis}
+            \end{tikzpicture}
+                \captionsetup{justification=centering}
+                \caption{Зависимость времени исполнения от количества потоков}
+                \label{graph:1}
+            \end{figure}
+            
+            \begin{figure}[!htbp]
+                \centering
+            \begin{tikzpicture}
+            \begin{axis}[
+                width=0.8\textwidth,
+                height=0.6\textwidth,
+                ylabel={Время, секунды},
+                xlabel={Количество ошибок},
+                y label style={at={(-0.05, 0.5)}},
+                ymin=0, ymax=60,
+                xmin=0, xmax=10,
+                xtick={0, 1, 2, 3, 4, 5, 6, 7, 8},
+                ytick={5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55},
+                legend pos=south east,
+                ymajorgrids=true,
+                grid style=dashed,
+                cycle list name=color list] 
+                \addplot+[mark=square] coordinates{(1, 3.321)(2, 9.964)(4, 32.942)(6, 50.241)};
+                \addplot+[mark=square] coordinates{(1, 10.317)(2, 19.182)(4, 39.09)(6, 49.95)};
+                %\addplot+[mark=square] coordinates{(1, 11.16)(2, 16.512)};
+                \legend{1 процесс, 4 процесса}
+     
+            \end{axis}
+            \end{tikzpicture}
+                \captionsetup{justification=centering}
+                \caption{Зависимость времени восстановления от количества ошибок}
+                \label{graph:1}
+            \end{figure}
+\end{document}
