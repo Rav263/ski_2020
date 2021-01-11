@@ -6,9 +6,9 @@
 #include <signal.h>
 #include <unistd.h>
 #define  Max(a,b) ((a)>(b)?(a):(b))
-#define P() printf("line: %d\n", __LINE__);
+#define P() printf("rank: %d line: %d\n", world_rank, __LINE__);
 
-#define  N 8192
+#define  N 8192//16384
 #define SAVE_RANGE 5
 int last_save_iter = 1;
 double maxeps = 0.1e-7;
@@ -32,7 +32,8 @@ int size;
 int world_start, world_end;
 
 bool error = false;
-bool was_error = false;
+bool was_error_10 = false;
+bool was_error_50 = false;
 MPI_Comm main_comm = MPI_COMM_WORLD;
 
 void print(double **mat) {
@@ -87,7 +88,7 @@ static void verbose_errhandler(MPI_Comm* pcomm, int* perr, ...) {
     int i, rank, comm_size, nf, len, eclass;
     MPI_Group group_c, group_f;
     int*ranks_gc, *ranks_gf;
-    
+    MPIX_Comm_revoke(comm); 
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &comm_size);
     MPIX_Comm_failure_ack(comm);
@@ -124,18 +125,21 @@ static void verbose_errhandler(MPI_Comm* pcomm, int* perr, ...) {
 
     error = true;
     world_size -= additional_procs;
-    
     if (world_start != world_end) {
         free_mem(A, size);
     }
-    
+    MPI_Allreduce(&world_size, &world_size, 1, MPI_INT, MPI_MAX, main_comm);
+    MPI_Barrier(main_comm);  
     calc_start_end(&world_start, &world_end, world_rank);
     size = world_end - world_start + 2;
     
     if (world_start != world_end) {
         A = get_mem(size);
+        if (A == NULL) {
+            fprintf(stdout, "WTF: %d\n", world_rank);
+        }
     }
-    
+    printf("rank: %d World size: %d\n", world_rank, world_size);
 
     fflush(stdout);
     free(ranks_gf); 
@@ -204,7 +208,7 @@ int main(int an, char **as) {
         if (A == NULL) {
             fprintf(stdout, "WTF: %d\n", world_rank);
         }
-        fprintf(stdout, "world size: %d, world rank: %d, start: %d, end: %d\n", world_size, world_rank, world_start, world_end);
+        fprintf(stdout, "world size: %d, world rank: %d, start: %d, end: %d size: %d\n", world_size, world_rank, world_start, world_end, size);
     }
     MPI_Barrier(main_comm);
     
@@ -220,32 +224,33 @@ int main(int an, char **as) {
     MPI_Barrier(main_comm);
 	for(int it = 1; it <= itmax; it++) {
         MPI_Barrier(main_comm);
-        
+ 
         if (error) {
             if (world_start != world_end)
                 load_matrix();
+
             it = last_save_iter;
+            if (it <= 10) was_error_10 = true;
+            if (it >= 10 && it <= 50) was_error_50 = true;
             error = false;
-            was_error = true;
-        }
-        
-        if (it == SAVE_RANGE + last_save_iter) {
-            if (world_start != world_end) {
-                save_matrix();
-            }
-            last_save_iter = it;
-        }
-        eps = 0.;
-		relax(A, size);
-        
-        if (error) {
             continue;
         }
-        if (world_rank == 0 && (it == 10 || it == 90) && !was_error) {
+        verify(A, size);
+       
+        eps = 0.;
+        
+        if (world_rank == 0 && (it == 10) && !was_error_10) {
             raise(SIGKILL);
         }
+		relax(A, size);
+        if (error) {
+            continue;
+        } /*
+        if (world_rank == 0 && (it == 50) && !was_error_50) {
+            raise(SIGKILL);
+        }*/
+
         double local_eps = update();
-        
         if (error) {
             continue;
         }
@@ -261,20 +266,20 @@ int main(int an, char **as) {
             printf( "it=%4i   eps=%f  last_save=%d\n", it, eps, last_save_iter);
             fflush(stdout);
             if (eps < maxeps) break;
+        } 
+        if (it == SAVE_RANGE + last_save_iter) {
+            if (world_start != world_end) {
+                save_matrix();
+            }
+            last_save_iter = it;
         }
     }
-    if (error) {
-        error = false;
-    }
-	verify(A, size);
-    if (error) {
-        verify(A, size);
-    }
+    verify(A, size);
 
     double all_time = MPI_Wtime() - time_begin;
-
     if (world_rank == 0) {
         printf("size = %d\ntime = %lf\n", world_size, all_time);
+        fflush(stdout);
     }
     if (world_start != world_end) {
         free_mem(A, size);
@@ -302,17 +307,20 @@ void relax(double **A, int size) {
     if (world_rank != 0) {
         MPI_Recv(A[0], N, MPI_DOUBLE, world_rank - 1, 0, main_comm, MPI_STATUS_IGNORE);
     }
+    if (error) return;
     for(int i = 1; i < size - 1; i++) {
 	    for(int j = 1; j < N - 1; j++) {
 		    A[i][j] = (A[i - 1][j] + A[i + 1][j]) / 2.;
         }
 	}
+    if (error) return;
 
     if (world_rank != world_size - 1) {
         MPI_Request req;
         MPI_Isend(A[size - 2], N, MPI_DOUBLE, world_rank + 1, 0, main_comm, &req);
         MPI_Request_free(&req);
     }
+    if (error) return;
 }
 
 double update() {
@@ -345,13 +353,15 @@ double update() {
 void verify(double **A, int size) { 
 	double local_sum = 0.;
     double global_sum = 0.;
-	for(int i = 1; i < size - 1; i++) {
-	    for(int j = 0; j <= N - 1; j++) {
-		    local_sum = local_sum + A[i][j] * (i + world_start) * (j + 1) / (N * N);
-	    }
+	if (world_start != world_end) {
+        for(int i = 1; i < size - 1; i++) {
+	        for(int j = 0; j <= N - 1; j++) {
+		        local_sum = local_sum + A[i][j] * (i + world_start) * (j + 1) / (N * N);
+	        }
+        }
     }
+    MPI_Barrier(main_comm);
     MPI_Reduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, 0, main_comm);
-	
     if (world_rank == 0) {
         printf("  S = %f\n", global_sum);
     }
